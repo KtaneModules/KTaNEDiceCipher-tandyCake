@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using KModkit;
 
@@ -17,15 +15,13 @@ public class DiceCipherScript : MonoBehaviour {
     private GameObject[][] allPips = new GameObject[4][];
     public GameObject[] sidePips;
 
-
     static int moduleIdCounter = 1;
     int moduleId;
     private bool moduleSolved;
-    
 
-    int[][] pipPatterns = new int[][] { new int[] { 3 }, new int[] { 0 }, new int[] { 1 }, new int[] { 2 }, new int[] { 4 }, new int[] { 7 }, new int[] { 6 }, new int[] { 5 }, new int[] { 0, 7 }, new int[] { 0, 7 }, new int[] { 1, 6 }, new int[] { 2, 5 }, new int[] { 3, 4 }, new int[] { 0, 5 }, new int[] { 0, 2 }, new int[] { 2, 7 }, new int[] { 5, 7 }, new int[] { 0, 5, 7 }, new int[] { 1, 3, 6 }, new int[] { 0, 2, 5 }, new int[] { 1, 3, 4 }, new int[] { 1, 3, 4 }, new int[] { 0, 2, 7 }, new int[] { 1, 4, 6 }, new int[] { 2, 5, 7 }, new int[] { 3, 4, 6 } };
+    int[][] pipPatterns = new int[][] { new[] { 3 }, new[] { 0 }, new[] { 1 }, new[] { 2 }, new[] { 4 }, new[] { 7 }, new[] { 6 }, new[] { 5 }, new[] { 0, 7 }, new[] { 0, 7 }, new[] { 1, 6 }, new[] { 2, 5 }, new[] { 3, 4 }, new[] { 0, 5 }, new[] { 0, 2 }, new[] { 2, 7 }, new[] { 5, 7 }, new[] { 0, 5, 7 }, new[] { 1, 3, 6 }, new[] { 0, 2, 5 }, new[] { 1, 3, 4 }, new[] { 1, 3, 4 }, new[] { 0, 2, 7 }, new[] { 1, 4, 6 }, new[] { 2, 5, 7 }, new[] { 3, 4, 6 } };
     string[] groups = new string[] { "ABIJKRS", "CDLMTUV", "EFNOWX", "GHPQYZ" };
-    char[] alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToCharArray();
+    string[] PEOPLEIDONTREALLYLIKE = new string[] { "DESKTOP-RGTP319", "DESKTOP-4HOQP30", "laptopInMyBackPocket" };
 
     int chosenGroup;
     int submitGroup;
@@ -49,25 +45,34 @@ public class DiceCipherScript : MonoBehaviour {
         submitGroup = (Bomb.GetBatteryHolderCount() + Bomb.GetIndicators().Count()) % 4;
         Debug.LogFormat("[Dice Cipher #{0}] The common group on the module is group {1}. This is also the index of the target die.", moduleId, chosenGroup + 1);
         Debug.LogFormat("[Dice Cipher #{0}] The target die must be in group {1}.", moduleId, submitGroup + 1);
-        RollDice();
+        RollDice(true); 
     }
 
-    void RollDice()
+    void RollDice(bool start = false)
     {
-        roll.AddInteractionPunch(1);
-        Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, roll.transform);
-        Audio.PlaySoundAtTransform("Roll", transform);
+        if (!start)
+        {
+            roll.AddInteractionPunch(1);
+            Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, roll.transform);
+            Audio.PlaySoundAtTransform(
+                (UnityEngine.Random.Range(0, 200) == 0 || PEOPLEIDONTREALLYLIKE.Contains(Environment.MachineName)) ?
+                "rolldadice" : "Roll", transform);
+        }
         displayed = WordList.phrases.Where(x => GetGroup(x).Contains(chosenGroup.ToString())).PickRandom();
         Debug.LogFormat("[Dice Cipher #{0}] The dice have been rolled, the displayed word is {1}.", moduleId, displayed);
         for (int i = 0; i < 4; i++)
         {
             for (int j = 0; j < 8; j++)
                 allPips[i][j].SetActive(false); //turns off all the pips
-            foreach (int pip in pipPatterns[Array.IndexOf(alphabet, displayed[i])]) 
+            foreach (int pip in pipPatterns[displayed[i] - 'A']) 
                 allPips[i][pip].SetActive(true); //turns on the pips which are in the correct 
         }
+        bool[] sides = new bool[48];
+        bool[][] valids = new bool[][] { new[] { true, false, false }, new[] { false, true, false }, new[] { false, false, false }, new[] { true, false, true } }; //These patterns are able to appear in the top row of a dice.
+        for (int i = 0; i < 12; i++)
+            Array.Copy(valids.PickRandom(), 0, sides, 3*i, 3);
         for (int i = 0; i < 48; i++)
-            sidePips[i].SetActive(UnityEngine.Random.Range(0,2) == 1);
+            sidePips[i].SetActive(sides[i]);
     }
     void Submit()
     {
@@ -93,7 +98,7 @@ public class DiceCipherScript : MonoBehaviour {
         for (int i = 0; i < 4; i++)
             if (groups[i].Contains(input))
                 return i;
-        throw new ArgumentException();
+        throw new ArgumentOutOfRangeException("input");
     }
     string GetGroup(string input)
     {
@@ -114,9 +119,9 @@ public class DiceCipherScript : MonoBehaviour {
     private readonly string TwitchHelpMessage = @"Use [!{0} roll] to roll the dice. Use [!{0} submit] to press the submit button.";
     #pragma warning restore 414
 
-    IEnumerator ProcessTwitchCommand(string input)
+    IEnumerator ProcessTwitchCommand(string command)
     {
-        string command = input.Trim().ToUpperInvariant();
+        command = command.Trim().ToUpperInvariant();
         if (command == "ROLL")
         {
             yield return null;
@@ -131,14 +136,11 @@ public class DiceCipherScript : MonoBehaviour {
 
     IEnumerator TwitchHandleForcedSolve()
     {
-        while (!moduleSolved)
+        while (!CheckAnswer(displayed))
         {
-            while (!CheckAnswer(displayed))
-            {
-                roll.OnInteract();
-                yield return new WaitForSeconds(0.15f);
-            }
-            submit.OnInteract();
+            roll.OnInteract();
+            yield return new WaitForSeconds(0.15f);
         }
+        submit.OnInteract();
     }
 }
