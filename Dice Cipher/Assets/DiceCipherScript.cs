@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using KModkit;
@@ -21,6 +22,8 @@ public class DiceCipherScript : MonoBehaviour {
 
     int[][] pipPatterns = new int[][] { new[] { 3 }, new[] { 0 }, new[] { 1 }, new[] { 2 }, new[] { 4 }, new[] { 7 }, new[] { 6 }, new[] { 5 }, new[] { 0, 7 }, new[] { 0, 7 }, new[] { 1, 6 }, new[] { 2, 5 }, new[] { 3, 4 }, new[] { 0, 5 }, new[] { 0, 2 }, new[] { 2, 7 }, new[] { 5, 7 }, new[] { 0, 5, 7 }, new[] { 1, 3, 6 }, new[] { 0, 2, 5 }, new[] { 1, 3, 4 }, new[] { 1, 3, 4 }, new[] { 0, 2, 7 }, new[] { 1, 4, 6 }, new[] { 2, 5, 7 }, new[] { 3, 4, 6 } };
     string[] groups = new string[] { "ABIJKRS", "CDLMTUV", "EFNOWX", "GHPQYZ" };
+    string[] first12;
+    int rollPointer;
     string[] PEOPLEIDONTREALLYLIKE = new string[] { "DESKTOP-RGTP319", "DESKTOP-4HOQP30", "laptopInMyBackPocket" };
 
     int chosenGroup;
@@ -33,19 +36,29 @@ public class DiceCipherScript : MonoBehaviour {
         moduleId = moduleIdCounter++;
         roll.OnInteract += delegate () { RollDice(); return false; };
         submit.OnInteract += delegate () { Submit(); return false; };
-        allPips[0] = Die1Pips;
-        allPips[1] = Die2Pips;
-        allPips[2] = Die3Pips;
-        allPips[3] = Die4Pips;
+        allPips = new[] { Die1Pips, Die2Pips, Die3Pips, Die4Pips };
     }
 
     void Start ()
     {
         chosenGroup = UnityEngine.Random.Range(0, 4);
         submitGroup = (Bomb.GetBatteryHolderCount() + Bomb.GetIndicators().Count()) % 4;
+        GetFirst12();
+        Debug.LogFormat("<Dice Cipher #{0}> The first 12 words are {1}.", moduleId, first12.Join());
         Debug.LogFormat("[Dice Cipher #{0}] The common group on the module is group {1}. This is also the index of the target die.", moduleId, chosenGroup + 1);
         Debug.LogFormat("[Dice Cipher #{0}] The target die must be in group {1}.", moduleId, submitGroup + 1);
         RollDice(true); 
+    }
+
+    void GetFirst12()
+    {
+        string[] groupDeterminers;
+        do groupDeterminers = WordList.phrases.Shuffle().Take(5).ToArray();
+        while (Enumerable.Range(0, 4).Where(num => GetGroups(groupDeterminers.Join("")).Contains(num)).SequenceEqual(new int[] { chosenGroup }));
+        string[] solutionDeterminers;
+        do solutionDeterminers = WordList.phrases.Shuffle().Take(7).ToArray();
+        while (solutionDeterminers.All(x => !CheckAnswer(x)));
+        first12 = groupDeterminers.Concat(solutionDeterminers).ToArray();
     }
 
     void RollDice(bool start = false)
@@ -58,7 +71,9 @@ public class DiceCipherScript : MonoBehaviour {
                 (UnityEngine.Random.Range(0, 200) == 0 || PEOPLEIDONTREALLYLIKE.Contains(Environment.MachineName)) ?
                 "rolldadice" : "Roll", transform);
         }
-        displayed = WordList.phrases.Where(x => GetGroup(x).Contains(chosenGroup.ToString())).PickRandom();
+        if (rollPointer < 12)
+            displayed = first12[rollPointer++];
+        else displayed = WordList.phrases.Where(x => GetGroups(x).Contains(chosenGroup)).PickRandom();
         Debug.LogFormat("[Dice Cipher #{0}] The dice have been rolled, the displayed word is {1}.", moduleId, displayed);
         for (int i = 0; i < 4; i++)
         {
@@ -100,14 +115,12 @@ public class DiceCipherScript : MonoBehaviour {
                 return i;
         throw new ArgumentOutOfRangeException("input");
     }
-    string GetGroup(string input)
+    IEnumerable<int> GetGroups(string input)
     {
-        string output = string.Empty;
         foreach (char letter in input)
             for (int i = 0; i < 4; i++)
                 if (groups[i].Contains(letter))
-                    output += i;
-        return output;
+                    yield return i;
     }
 
     bool CheckAnswer(string input)
