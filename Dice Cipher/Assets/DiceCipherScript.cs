@@ -53,8 +53,13 @@ public class DiceCipherScript : MonoBehaviour {
     void GetFirst12()
     {
         string[] groupDeterminers;
-        do groupDeterminers = WordList.phrases.Shuffle().Take(5).ToArray();
-        while (Enumerable.Range(0, 4).Where(num => GetGroups(groupDeterminers.Join("")).Contains(num)).SequenceEqual(new int[] { chosenGroup }));
+        int[] groupsWhichAppearInAll;
+        do
+        {
+            groupDeterminers = WordList.phrases.Shuffle().Take(5).ToArray();
+            groupsWhichAppearInAll = Enumerable.Range(0, 4).Where(num => GetGroups(groupDeterminers.Join("")).Contains(num)).ToArray();
+        }
+        while (groupsWhichAppearInAll.Count() == 1 && groupsWhichAppearInAll.Single() == chosenGroup);
         string[] solutionDeterminers;
         do solutionDeterminers = WordList.phrases.Shuffle().Take(7).ToArray();
         while (solutionDeterminers.All(x => !CheckAnswer(x)));
