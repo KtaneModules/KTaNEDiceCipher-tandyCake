@@ -28,6 +28,8 @@ public class DiceCipherScript : MonoBehaviour {
 
     int chosenGroup;
     int submitGroup;
+    List<string> validDisplays;
+    List<string> validSubmits;
 
     string displayed;
 
@@ -43,8 +45,12 @@ public class DiceCipherScript : MonoBehaviour {
     {
         chosenGroup = UnityEngine.Random.Range(0, 4);
         submitGroup = (Bomb.GetBatteryHolderCount() + Bomb.GetIndicators().Count()) % 4;
+        validDisplays = WordList.phrases.Where(x => GetGroups(x).Contains(chosenGroup)).ToList();
+        validSubmits = validDisplays.Where(x => GetGroup(x[chosenGroup]) == submitGroup).ToList();
+
         GetFirst12();
         Debug.LogFormat("<Dice Cipher #{0}> The first 12 words are {1}.", moduleId, first12.Join());
+        Debug.LogFormat("<Dice Cipher #{0}> The groups of the first 5 words are {1}.", moduleId, first12.Take(5).Select(str => GetGroups(str).Select(grp => grp + 1).Join("")).Join());
         Debug.LogFormat("[Dice Cipher #{0}] The common group on the module is group {1}. This is also the index of the target die.", moduleId, chosenGroup + 1);
         Debug.LogFormat("[Dice Cipher #{0}] The target die must be in group {1}.", moduleId, submitGroup + 1);
         RollDice(true); 
@@ -53,16 +59,18 @@ public class DiceCipherScript : MonoBehaviour {
     void GetFirst12()
     {
         string[] groupDeterminers;
+        string[] solutionDeterminers;
         int[] groupsWhichAppearInAll;
         do
         {
-            groupDeterminers = WordList.phrases.Shuffle().Take(5).ToArray();
-            groupsWhichAppearInAll = Enumerable.Range(0, 4).Where(num => GetGroups(groupDeterminers.Join("")).Contains(num)).ToArray();
-        }
-        while (groupsWhichAppearInAll.Count() == 1 && groupsWhichAppearInAll.Single() == chosenGroup);
-        string[] solutionDeterminers;
-        do solutionDeterminers = WordList.phrases.Shuffle().Take(7).ToArray();
-        while (solutionDeterminers.All(x => !CheckAnswer(x)));
+            groupDeterminers = validDisplays.Shuffle().Take(5).ToArray();
+            groupsWhichAppearInAll = Enumerable.Range(0, 4).Where(group => groupDeterminers.All(str => GetGroups(str).Contains(group))).ToArray();
+        } while (groupsWhichAppearInAll.Count() != 1);
+        do
+        {
+            solutionDeterminers = validDisplays.Shuffle().Take(7).ToArray();
+        } while (!solutionDeterminers.Any(str => validSubmits.Contains(str)));
+
         first12 = groupDeterminers.Concat(solutionDeterminers).ToArray();
     }
 
@@ -78,8 +86,9 @@ public class DiceCipherScript : MonoBehaviour {
         }
         if (rollPointer < 12)
             displayed = first12[rollPointer++];
-        else displayed = WordList.phrases.Where(x => GetGroups(x).Contains(chosenGroup)).PickRandom();
+        else displayed = validDisplays.PickRandom();
         Debug.LogFormat("[Dice Cipher #{0}] The dice have been rolled, the displayed word is {1}.", moduleId, displayed);
+
         for (int i = 0; i < 4; i++)
         {
             for (int j = 0; j < 8; j++)
@@ -99,7 +108,7 @@ public class DiceCipherScript : MonoBehaviour {
         submit.AddInteractionPunch(1);
         Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, submit.transform);
         if (moduleSolved) return;
-        else if (CheckAnswer(displayed))
+        else if (validSubmits.Contains(displayed))
         {
             moduleSolved = true;
             GetComponent<KMBombModule>().HandlePass();
@@ -128,10 +137,6 @@ public class DiceCipherScript : MonoBehaviour {
                     yield return i;
     }
 
-    bool CheckAnswer(string input)
-    {
-        return GetGroup(input[chosenGroup]) == submitGroup;
-    }
 
     #pragma warning disable 414
     private readonly string TwitchHelpMessage = @"Use [!{0} roll] to roll the dice. Use [!{0} submit] to press the submit button.";
@@ -154,7 +159,7 @@ public class DiceCipherScript : MonoBehaviour {
 
     IEnumerator TwitchHandleForcedSolve()
     {
-        while (!CheckAnswer(displayed))
+        while (!validSubmits.Contains(displayed))
         {
             roll.OnInteract();
             yield return new WaitForSeconds(0.15f);
